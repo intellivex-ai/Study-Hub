@@ -54,10 +54,9 @@ const useAppStore = create(
       timerRunning: false,
       timerTask: 'Study Session',
 
-      // Active session tracking (persisted so refresh can resume)
       activeSessionId: null,
-      sessionStartedAt: null, // ISO string — when timer was last started
-      elapsedAtPause: 0,      // seconds elapsed before last pause
+      sessionStartedAt: null,
+      elapsedAtPause: 0,
 
       setTimerMode: (mode) =>
         set({ timerMode: mode, timerSeconds: TIMER_DURATIONS[mode], timerRunning: false }),
@@ -98,7 +97,10 @@ const useAppStore = create(
         breakLength: 5,
         theme: 'dark',
         blockingSites: ['instagram.com', 'twitter.com', 'reddit.com'],
-        focusGoal: 14400, // seconds (4h)
+        blockedApps: [],
+        focusGoal: 14400,
+        showOnLeaderboard: true,
+        analyticsSharing: false,
       },
       updateSettings: (updates) =>
         set((s) => ({ settings: { ...s.settings, ...updates } })),
@@ -115,6 +117,9 @@ const useAppStore = create(
             notifications: dbRow.notifications ?? s.settings.notifications,
             theme: dbRow.theme ?? s.settings.theme,
             blockingSites: dbRow.blocked_sites ?? s.settings.blockingSites,
+            blockedApps: dbRow.blocked_apps ?? s.settings.blockedApps,
+            showOnLeaderboard: dbRow.show_on_leaderboard ?? s.settings.showOnLeaderboard,
+            analyticsSharing: dbRow.analytics_sharing ?? s.settings.analyticsSharing,
           },
         }))
       },
@@ -124,11 +129,54 @@ const useAppStore = create(
       setWeeklyData: (data) => set({ weeklyData: data }),
       heatmapData: [],
       setHeatmapData: (data) => set({ heatmapData: data }),
+
+      // ── Notes ─────────────────────────────────────────────
+      notes: [],
+      setNotes: (notes) => set({ notes }),
+      addNote: (note) => set((s) => ({ notes: [note, ...s.notes] })),
+      updateNote: (id, updates) =>
+        set((s) => ({
+          notes: s.notes.map((n) => (n.id === id ? { ...n, ...updates } : n)),
+        })),
+      removeNote: (id) => set((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
+      activeNoteId: null,
+      setActiveNoteId: (id) => set({ activeNoteId: id }),
+
+      // ── Flashcards ────────────────────────────────────────
+      flashcardDecks: [],
+      setFlashcardDecks: (decks) => set({ flashcardDecks: decks }),
+      addFlashcardDeck: (deck) => set((s) => ({ flashcardDecks: [deck, ...s.flashcardDecks] })),
+      removeFlashcardDeck: (id) =>
+        set((s) => ({ flashcardDecks: s.flashcardDecks.filter((d) => d.id !== id) })),
+      dueCardsCount: 0,
+      setDueCardsCount: (n) => set({ dueCardsCount: n }),
+
+      // ── Achievements ──────────────────────────────────────
+      earnedAchievements: [],
+      setEarnedAchievements: (keys) => set({ earnedAchievements: keys }),
+      addEarnedAchievement: (key) =>
+        set((s) => ({
+          earnedAchievements: s.earnedAchievements.includes(key)
+            ? s.earnedAchievements
+            : [...s.earnedAchievements, key],
+        })),
+
+      // ── XP Toast ──────────────────────────────────────────
+      xpToast: null, // { amount, label }
+      showXpToast: (amount, label = '') => {
+        set({ xpToast: { amount, label } })
+        setTimeout(() => set({ xpToast: null }), 3000)
+      },
+
+      // ── Ambient Sound ─────────────────────────────────────
+      ambientSound: null, // null or sound id string
+      ambientVolume: 0.4,
+      setAmbientSound: (id) => set({ ambientSound: id }),
+      setAmbientVolume: (v) => set({ ambientVolume: v }),
     }),
     {
       name: 'study-hub-store',
       partialize: (state) => ({
-        // Only persist what's safe & useful across refreshes
         user: state.user,
         timerMode: state.timerMode,
         timerTask: state.timerTask,
@@ -136,6 +184,9 @@ const useAppStore = create(
         activeSessionId: state.activeSessionId,
         sessionStartedAt: state.sessionStartedAt,
         elapsedAtPause: state.elapsedAtPause,
+        ambientSound: state.ambientSound,
+        ambientVolume: state.ambientVolume,
+        earnedAchievements: state.earnedAchievements,
       }),
     }
   )

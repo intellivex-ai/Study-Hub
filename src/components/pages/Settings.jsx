@@ -5,6 +5,10 @@ import useAppStore from '../../store/useAppStore'
 import { useAuth } from '../../lib/auth'
 import { profileService, settingsService } from '../../lib/api'
 import Avatar from '../ui/Avatar'
+import Switch from '../ui/Switch'
+import PremiumCard from '../ui/PremiumCard'
+import { Capacitor } from '@capacitor/core'
+import AppBlocker from '../../lib/appBlocker'
 
 const stagger = { animate: { transition: { staggerChildren: 0.06 } } }
 const fadeUp = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } }
@@ -16,21 +20,6 @@ const NAV_SECTIONS = [
   { id: 'privacy', label: 'Privacy & Data', icon: 'security' },
 ]
 
-function Toggle({ checked, onChange }) {
-  return (
-    <button
-      onClick={() => onChange(!checked)}
-      className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${checked ? 'bg-primary' : 'bg-surface-container-highest'}`}
-    >
-      <motion.div
-        animate={{ x: checked ? 24 : 2 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-md"
-      />
-    </button>
-  )
-}
-
 function SettingRow({ label, desc, value, onChange, type = 'toggle' }) {
   return (
     <div className="flex items-center justify-between py-4 border-b border-outline-variant/10 last:border-0">
@@ -38,7 +27,7 @@ function SettingRow({ label, desc, value, onChange, type = 'toggle' }) {
         <div className="font-semibold text-on-surface text-sm">{label}</div>
         {desc && <div className="text-xs text-on-surface-variant">{desc}</div>}
       </div>
-      {type === 'toggle' && <Toggle checked={value} onChange={onChange} />}
+      {type === 'toggle' && <Switch checked={value} onChange={onChange} />}
       {type === 'number' && (
         <input
           type="number"
@@ -58,8 +47,31 @@ export default function Settings() {
   const [nameEdit, setNameEdit] = useState(user.name)
   const [newSite, setNewSite] = useState('')
   const [savingName, setSavingName] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [nameSuccess, setNameSuccess] = useState(false)
   const syncTimer = useRef(null)
+
+  const [nativeApps, setNativeApps] = useState([])
+  const [devicePermissions, setDevicePermissions] = useState({ hasOverlay: false, hasAccessibility: false })
+  const isNative = Capacitor.isNativePlatform()
+
+  useEffect(() => {
+    if (isNative) {
+      AppBlocker.getInstalledApps().then(res => {
+        if (res?.apps) setNativeApps(res.apps)
+      }).catch(console.error)
+      
+      const checkPerms = () => {
+        AppBlocker.checkPermissions().then(res => {
+          if (res) setDevicePermissions(res)
+        }).catch(console.error)
+      }
+      checkPerms()
+      // Re-check when app comes to foreground
+      document.addEventListener('visibilitychange', checkPerms)
+      return () => document.removeEventListener('visibilitychange', checkPerms)
+    }
+  }, [isNative])
 
   // Load settings from DB on mount
   useEffect(() => {
@@ -90,7 +102,13 @@ export default function Settings() {
         notifications: merged.notifications,
         theme: merged.theme,
         blocked_sites: merged.blockingSites,
+        blocked_apps: merged.blockedApps,
+        show_on_leaderboard: merged.showOnLeaderboard,
+        analytics_sharing: merged.analyticsSharing,
       })
+      if (isNative && merged.blockedApps) {
+        AppBlocker.setBlockedApps({ packages: merged.blockedApps }).catch(console.error)
+      }
     }, 800)
   }, [authUser?.id, settings, updateSettings])
 
@@ -117,44 +135,99 @@ export default function Settings() {
     syncSettings({ blockingSites: settings.blockingSites.filter((s) => s !== site) })
   }
 
+  const handleToggleApp = (pkgName) => {
+    const current = settings.blockedApps || []
+    const updated = current.includes(pkgName)
+      ? current.filter(p => p !== pkgName)
+      : [...current, pkgName]
+    syncSettings({ blockedApps: updated })
+  }
+
+  const handleRequestAccessibility = () => AppBlocker.requestAccessibilityPermission()
+  const handleRequestOverlay = () => AppBlocker.requestOverlayPermission()
+
+  const handleDeleteAccount = async () => {
+    if (!authUser?.id) return
+    if (!window.confirm('Are you sure? This action is permanent and cannot be undone.')) return
+    
+    setIsDeleting(true)
+    try {
+      const { error } = await profileService.deleteAccount()
+      if (error) throw error
+      
+      await signOut()
+    } catch (err) {
+      console.error('Failed to delete account:', err)
+      alert('Failed to delete account. Please try again.')
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <PageWrapper>
       <motion.div variants={stagger} initial="initial" animate="animate" className="max-w-5xl mx-auto">
 
         {/* Header */}
-        <motion.div variants={fadeUp} className="mb-10">
-          <h1 className="text-4xl font-headline font-extrabold text-primary tracking-tight mb-2">Settings</h1>
-          <p className="text-on-surface-variant">Customize your sanctuary for maximum cognitive performance.</p>
+        <motion.div variants={fadeUp} className="mb-12">
+          <h1 className="text-5xl md:text-6xl font-headline font-black tracking-tighter text-white mb-3">
+            Settings<span className="text-primary">.</span>
+          </h1>
+          <p className="text-on-surface-variant text-lg max-w-2xl font-medium leading-relaxed">
+            Configure your focus sanctuary for <span className="text-primary/80">peak performance</span>.
+          </p>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
 
           {/* Sidebar Nav */}
           <motion.div variants={fadeUp} className="md:col-span-4">
-            <nav className="flex flex-col gap-1 sticky top-28">
+            <nav className="flex flex-col gap-2 sticky top-28 bg-surface-container-low/30 backdrop-blur-xl p-2 rounded-2xl border border-outline-variant/10 shadow-2xl">
               {NAV_SECTIONS.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => setActiveSection(s.id)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                  className={`group relative flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all duration-500 overflow-hidden ${
                     activeSection === s.id
-                      ? 'bg-surface-container-high text-primary font-semibold'
-                      : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                      ? 'text-on-primary font-bold shadow-lg shadow-primary/20'
+                      : 'text-on-surface-variant hover:bg-white/5 hover:text-on-surface'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-xl" style={activeSection === s.id ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                  {/* Background Gradient for Active State */}
+                  {activeSection === s.id && (
+                    <motion.div
+                      layoutId="sidebar-active-bg"
+                      className="absolute inset-0 bg-gradient-to-r from-primary to-primary-container z-0"
+                      transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
+                  
+                  {/* Hover Highlight (Non-active only) */}
+                  {activeSection !== s.id && (
+                    <div className="absolute inset-x-0 bottom-0 h-0.5 bg-primary/0 group-hover:bg-primary/20 transition-all duration-300" />
+                  )}
+
+                  <span className={`material-symbols-outlined text-2xl relative z-10 transition-transform duration-500 ${
+                    activeSection === s.id ? 'scale-110' : 'group-hover:scale-110 group-hover:text-primary'
+                  }`} style={activeSection === s.id ? { fontVariationSettings: "'FILL' 1" } : {}}>
                     {s.icon}
                   </span>
-                  {s.label}
+                  <span className="relative z-10 tracking-tight">{s.label}</span>
+                  
+                  {/* Glow effect on active */}
+                  {activeSection === s.id && (
+                    <div className="absolute top-1/2 -right-2 w-4 h-4 bg-white/20 blur-md rounded-full" />
+                  )}
                 </button>
               ))}
 
+              <div className="my-4 mx-4 h-px bg-outline-variant/10" />
+
               <button
                 onClick={signOut}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-left text-red-400 hover:bg-red-900/10 transition-all mt-4"
+                className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left text-red-400 hover:bg-red-500/10 transition-all duration-300"
               >
-                <span className="material-symbols-outlined text-xl">logout</span>
-                Sign Out
+                <span className="material-symbols-outlined text-2xl transition-transform group-hover:-translate-x-1">logout</span>
+                <span className="font-semibold">Sign Out</span>
               </button>
             </nav>
           </motion.div>
@@ -167,7 +240,7 @@ export default function Settings() {
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60 px-2">
                   Account Information
                 </h2>
-                <div className="glass-panel p-6 rounded-2xl space-y-6 border border-outline-variant/10">
+                <PremiumCard className="space-y-6">
                   <div className="flex items-center gap-6">
                     <div className="relative">
                       <Avatar name={user.name} size="xl" border />
@@ -209,7 +282,7 @@ export default function Settings() {
                       />
                     </div>
                   </div>
-                </div>
+                </PremiumCard>
               </section>
             )}
 
@@ -218,7 +291,7 @@ export default function Settings() {
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60 px-2">
                   Focus & Blocking
                 </h2>
-                <div className="glass-panel p-6 rounded-2xl border border-outline-variant/10">
+                <PremiumCard>
                   <h3 className="font-bold text-on-surface mb-4">Timer Settings</h3>
                   <SettingRow
                     label="Pomodoro Length (minutes)"
@@ -246,9 +319,9 @@ export default function Settings() {
                     value={settings.soundEnabled}
                     onChange={(v) => syncSettings({ soundEnabled: v })}
                   />
-                </div>
+                </PremiumCard>
 
-                <div className="glass-panel p-6 rounded-2xl border border-outline-variant/10">
+                <PremiumCard>
                   <h3 className="font-bold text-on-surface mb-2">Blocked Sites</h3>
                   <p className="text-xs text-on-surface-variant mb-4">These sites will be blocked during focus sessions.</p>
                   <div className="flex gap-2 mb-4">
@@ -277,14 +350,70 @@ export default function Settings() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </PremiumCard>
+
+                {isNative && (
+                  <PremiumCard>
+                    <h3 className="font-bold text-on-surface mb-2">Blocked Mobile Apps</h3>
+                    <p className="text-xs text-on-surface-variant mb-4">Select the Android apps you want to block completely during focus sessions.</p>
+                    
+                    {(!devicePermissions.hasOverlay || !devicePermissions.hasAccessibility) && (
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-4">
+                        <h4 className="text-amber-500 font-bold text-sm mb-2 flex items-center gap-2">
+                          <span className="material-symbols-outlined">warning</span> Action Required
+                        </h4>
+                        <p className="text-xs text-amber-500/80 mb-3">Study Hub needs system permissions to lock you out of other apps.</p>
+                        <div className="flex flex-col gap-2">
+                          {!devicePermissions.hasAccessibility && (
+                            <button onClick={handleRequestAccessibility} className="bg-amber-500/20 text-amber-500 px-4 py-2 rounded-lg text-xs font-bold text-left hover:bg-amber-500/30 transition-colors">
+                              Enable Accessibility Service
+                            </button>
+                          )}
+                          {!devicePermissions.hasOverlay && (
+                            <button onClick={handleRequestOverlay} className="bg-amber-500/20 text-amber-500 px-4 py-2 rounded-lg text-xs font-bold text-left hover:bg-amber-500/30 transition-colors">
+                              Allow Display Over Other Apps
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                      {nativeApps.length === 0 ? (
+                        <p className="text-sm text-on-surface-variant text-center py-4">No blockable apps found.</p>
+                      ) : (
+                        nativeApps.map((app) => {
+                          const isBlocked = (settings.blockedApps || []).includes(app.packageName);
+                          return (
+                            <div key={app.packageName} className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${isBlocked ? 'bg-red-500/5 border-red-500/20' : 'bg-surface-container-highest border-transparent'}`}>
+                              <div className="flex items-center gap-3">
+                                {app.icon ? (
+                                  <img src={app.icon} alt={app.name} className="w-8 h-8 rounded-lg" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-sm text-on-surface-variant">android</span>
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="text-sm font-bold text-on-surface">{app.name}</div>
+                                  <div className="text-[10px] text-on-surface-variant font-mono truncate max-w-[150px]">{app.packageName}</div>
+                                </div>
+                              </div>
+                              <Switch checked={isBlocked} onChange={() => handleToggleApp(app.packageName)} />
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </PremiumCard>
+                )}
               </section>
             )}
 
             {activeSection === 'appearance' && (
               <section className="space-y-6">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60 px-2">Appearance</h2>
-                <div className="glass-panel p-6 rounded-2xl border border-outline-variant/10 space-y-4">
+                <PremiumCard className="space-y-4">
                   <h3 className="font-bold text-on-surface">Theme</h3>
                   <div className="grid grid-cols-3 gap-3">
                     {['dark', 'deep', 'forest'].map((t) => (
@@ -296,35 +425,67 @@ export default function Settings() {
                       </button>
                     ))}
                   </div>
-                </div>
+                </PremiumCard>
               </section>
             )}
 
             {activeSection === 'privacy' && (
               <section className="space-y-6">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60 px-2">Privacy & Data</h2>
-                <div className="glass-panel p-6 rounded-2xl border border-outline-variant/10">
+                <PremiumCard>
                   <SettingRow
                     label="Push Notifications"
                     desc="Session reminders and streak alerts"
                     value={settings.notifications}
                     onChange={(v) => syncSettings({ notifications: v })}
                   />
-                  <SettingRow label="Show on Leaderboard" desc="Let others see your focus stats" value={true} onChange={() => {}} />
-                  <SettingRow label="Analytics Sharing" desc="Help improve Kesari AI with your data" value={false} onChange={() => {}} />
-                </div>
-                <div className="glass-panel p-6 rounded-2xl border border-red-900/20">
-                  <h3 className="font-bold text-red-400 mb-2">Danger Zone</h3>
-                  <p className="text-xs text-on-surface-variant mb-4">These actions are irreversible.</p>
-                  <div className="flex flex-wrap gap-3">
-                    <button className="px-4 py-2 bg-red-900/20 text-red-400 text-sm font-bold rounded-xl border border-red-900/20 hover:bg-red-900/30 transition-colors">
+                  <SettingRow
+                    label="Show on Leaderboard"
+                    desc="Let others see your focus stats"
+                    value={settings.showOnLeaderboard ?? true}
+                    onChange={(v) => syncSettings({ showOnLeaderboard: v })}
+                  />
+                  <SettingRow
+                    label="Analytics Sharing"
+                    desc="Help improve Kesari AI with your data"
+                    value={settings.analyticsSharing ?? false}
+                    onChange={(v) => syncSettings({ analyticsSharing: v })}
+                  />
+                </PremiumCard>
+                <PremiumCard variant="danger" className="mt-8">
+                  <h3 className="font-bold text-red-500 mb-2 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">warning</span>
+                    Danger Zone
+                  </h3>
+                  <p className="text-xs text-on-surface-variant mb-6">These actions are irreversible and will permanently affect your data.</p>
+                  <div className="flex flex-wrap gap-4">
+                    <button
+                      onClick={() => {
+                        const data = { user, settings }
+                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url; a.download = 'studyhub-data.json'; a.click()
+                        URL.revokeObjectURL(url)
+                      }}
+                      className="px-6 py-2.5 bg-red-500/10 text-red-400 text-sm font-bold rounded-xl border border-red-500/20 hover:bg-red-500/20 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-all duration-300"
+                    >
                       Export Data
                     </button>
-                    <button className="px-4 py-2 bg-red-900/20 text-red-400 text-sm font-bold rounded-xl border border-red-900/20 hover:bg-red-900/30 transition-colors">
-                      Delete Account
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={isDeleting}
+                      className="px-6 py-2.5 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-900/20 hover:bg-red-500 hover:shadow-red-500/40 transition-all duration-300 disabled:opacity-50"
+                    >
+                      {isDeleting ? (
+                        <span className="flex items-center gap-2">
+                          <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Deleting…
+                        </span>
+                      ) : 'Delete Account'}
                     </button>
                   </div>
-                </div>
+                </PremiumCard>
               </section>
             )}
 

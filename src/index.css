@@ -16,6 +16,7 @@ body {
 
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -23,14 +24,14 @@ body {
 
 .glass-card {
   background: rgba(45, 52, 73, 0.4);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 .glass-panel {
   background: rgba(23, 31, 51, 0.6);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 .bg-mesh {
@@ -45,3 +46,93 @@ body {
 ::-webkit-scrollbar-thumb { background: #2d3449; border-radius: 10px; }
 
 .timer-glow { filter: drop-shadow(0 0 20px rgba(74, 225, 118, 0.2)); }
+
+/* ── Card Flip (Flashcards) ────────────────────────────── */
+.perspective { perspective: 1200px; }
+
+.flip-card {
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.flip-card.flipped { transform: rotateY(180deg); }
+
+.flip-front,
+.flip-back {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.flip-back { transform: rotateY(180deg); }
+
+/* ── Breathing Animation (Focus Break) ────────────────── */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.breathe { animation: breathe 4s ease-in-out infinite; }
+
+/* ── XP Shimmer ────────────────────────────────────────── */
+@keyframes xp-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.xp-shimmer {
+  background: linear-gradient(90deg, #4AE176 0%, #00ff87 40%, #4AE176 60%, #003915 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: xp-shimmer 2s linear infinite;
+}
+
+/* ── Float Up (XP Toast) ───────────────────────────────── */
+@keyframes float-up {
+  0% { transform: translateY(0) scale(0.8); opacity: 0; }
+  20% { transform: translateY(-10px) scale(1.05); opacity: 1; }
+  80% { transform: translateY(-40px) scale(1); opacity: 1; }
+  100% { transform: translateY(-60px) scale(0.95); opacity: 0; }
+}
+
+.float-up { animation: float-up 3s ease-in-out forwards; }
+
+/* ── Achievement Pop ───────────────────────────────────── */
+@keyframes achievement-pop {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  60% { transform: scale(1.1) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.achievement-pop { animation: achievement-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+/* ── Note editor ──────────────────────────────────────── */
+.note-editor {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #dae2fd;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  width: 100%;
+  min-height: 300px;
+  font-family: 'Inter', sans-serif;
+}
+
+.note-editor::placeholder { color: rgba(255,255,255,0.2); }
+
+/* ── Ambient pulse ─────────────────────────────────────── */
+@keyframes ambient-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 225, 118, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(74, 225, 118, 0); }
+}
+
+.ambient-active { animation: ambient-pulse 2s ease-in-out infinite; }
+
+/* ── Rarity glows ──────────────────────────────────────── */
+.rarity-bronze { box-shadow: 0 0 12px rgba(205, 127, 50, 0.3); border-color: rgba(205, 127, 50, 0.4) !important; }
+.rarity-silver { box-shadow: 0 0 12px rgba(192, 192, 192, 0.3); border-color: rgba(192, 192, 192, 0.4) !important; }
+.rarity-gold { box-shadow: 0 0 16px rgba(255, 215, 0, 0.35); border-color: rgba(255, 215, 0, 0.5) !important; }
+.rarity-platinum { box-shadow: 0 0 20px rgba(74, 225, 118, 0.4); border-color: rgba(74, 225, 118, 0.6) !important; }

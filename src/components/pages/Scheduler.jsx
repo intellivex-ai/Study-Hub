@@ -1,24 +1,42 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import PageWrapper from '../layout/PageWrapper'
+import PremiumCard from '../ui/PremiumCard'
 import useAppStore from '../../store/useAppStore'
 import { useAuth } from '../../lib/auth'
 import { tasksService } from '../../lib/api'
 import { SkeletonCard, SkeletonText, SkeletonAvatar } from '../ui/Skeleton'
+import Modal from '../ui/Modal'
 
-const stagger = { animate: { transition: { staggerChildren: 0.08 } } }
+const stagger = { animate: { transition: { staggerChildren: 0.07 } } }
 const fadeUp = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } }
 
-const priorityColors = {
-  high: 'border-l-primary bg-primary/5',
-  medium: 'border-l-secondary bg-secondary/5',
-  low: 'border-l-surface-variant bg-surface-container-high/50',
-}
-
-const priorityLabels = {
-  high: { bg: 'bg-primary/10 text-primary', text: 'High' },
-  medium: { bg: 'bg-secondary/10 text-secondary', text: 'Medium' },
-  low: { bg: 'bg-outline/20 text-on-surface-variant', text: 'Low' },
+const PRIORITY_CONFIG = {
+  high: {
+    border: 'border-primary/40',
+    bg: 'bg-primary/5',
+    badge: 'bg-primary/15 text-primary border border-primary/20',
+    dot: 'bg-primary',
+    label: 'High',
+    icon: 'priority_high',
+  },
+  medium: {
+    border: 'border-amber-500/30',
+    bg: 'bg-amber-500/5',
+    badge: 'bg-amber-500/15 text-amber-400 border border-amber-500/20',
+    dot: 'bg-amber-400',
+    label: 'Medium',
+    icon: 'drag_handle',
+  },
+  low: {
+    border: 'border-white/5',
+    bg: 'bg-white/2',
+    badge: 'bg-white/5 text-on-surface-variant border border-white/5',
+    dot: 'bg-on-surface-variant',
+    label: 'Low',
+    icon: 'arrow_downward',
+  },
 }
 
 function AddTaskModal({ onClose, onCreate }) {
@@ -38,57 +56,58 @@ function AddTaskModal({ onClose, onCreate }) {
     onClose()
   }
 
+  const inputClass = "w-full bg-white/5 border border-white/8 hover:border-primary/30 focus:border-primary/50 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none transition-all duration-200 text-sm"
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="relative z-10 w-full max-w-md bg-surface-container-low rounded-3xl p-8 border border-outline-variant/10"
-      >
-        <h2 className="font-headline font-bold text-xl text-on-surface mb-6">Add Focus Session</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <Modal open onClose={onClose} title="Add Focus Session">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="task-title" className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">Task Title *</label>
+          <input id="task-title" value={form.title} onChange={update('title')} placeholder="e.g. Linear Algebra Review"
+            className={inputClass} required autoFocus />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Title *</label>
-            <input value={form.title} onChange={update('title')} placeholder="e.g. Linear Algebra Review"
-              className="w-full bg-surface-container-high border border-outline-variant/20 rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:border-primary/50" required />
+            <label htmlFor="task-subject" className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">Subject</label>
+            <input id="task-subject" value={form.subject} onChange={update('subject')} placeholder="Mathematics" className={inputClass} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Subject</label>
-              <input value={form.subject} onChange={update('subject')} placeholder="Mathematics"
-                className="w-full bg-surface-container-high border border-outline-variant/20 rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:border-primary/50" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Time</label>
-              <input value={form.scheduled_time} onChange={update('scheduled_time')} placeholder="9:00 AM"
-                className="w-full bg-surface-container-high border border-outline-variant/20 rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:border-primary/50" />
-            </div>
+          <div>
+            <label htmlFor="task-time" className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">Time</label>
+            <input id="task-time" value={form.scheduled_time} onChange={update('scheduled_time')} placeholder="9:00 AM" className={inputClass} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Duration</label>
-              <input value={form.duration} onChange={update('duration')} placeholder="60m"
-                className="w-full bg-surface-container-high border border-outline-variant/20 rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:border-primary/50" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Priority</label>
-              <select value={form.priority} onChange={update('priority')}
-                className="w-full bg-surface-container-high border border-outline-variant/20 rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:border-primary/50">
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="task-duration" className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">Duration</label>
+            <input id="task-duration" value={form.duration} onChange={update('duration')} placeholder="60m" className={inputClass} />
           </div>
-          <button type="submit" disabled={loading}
-            className="w-full py-3 bg-gradient-to-br from-[#4ae176] to-[#00a74b] text-[#003915] font-bold rounded-xl mt-2 disabled:opacity-60">
-            {loading ? 'Adding…' : 'Add Session'}
-          </button>
-        </form>
-      </motion.div>
-    </div>
+          <div>
+            <label htmlFor="task-priority" className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">Priority</label>
+            <select id="task-priority" value={form.priority} onChange={update('priority')} className={`${inputClass} cursor-pointer appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]`} style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}>
+              <option value="high" className="bg-[#1a1c2c]">🔴 High</option>
+              <option value="medium" className="bg-[#1a1c2c]">🟡 Medium</option>
+              <option value="low" className="bg-[#1a1c2c]">⚪ Low</option>
+            </select>
+          </div>
+        </div>
+
+        <motion.button
+          type="submit"
+          disabled={loading}
+          whileTap={{ scale: 0.97 }}
+          className="w-full py-3.5 bg-gradient-to-br from-primary to-primary-container text-[#003915] font-black rounded-xl mt-2 disabled:opacity-50 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-shadow"
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="w-4 h-4 border-2 border-[#003915]/30 border-t-[#003915] rounded-full animate-spin" />
+              Adding…
+            </span>
+          ) : '+ Add Session'}
+        </motion.button>
+      </form>
+    </Modal>
   )
 }
 
@@ -132,91 +151,143 @@ export default function Scheduler() {
 
   const remaining = tasks.filter((s) => !s.done).length
   const done = tasks.filter((s) => s.done).length
+  const totalPct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
     <PageWrapper>
-      {showAddModal && (
-        <AddTaskModal
-          onClose={() => setShowAddModal(false)}
-          onCreate={handleCreate}
-        />
-      )}
+      <AnimatePresence>
+        {showAddModal && <AddTaskModal onClose={() => setShowAddModal(false)} onCreate={handleCreate} />}
+      </AnimatePresence>
 
       <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-8">
 
-        {/* Header */}
+        {/* ── Header ────────────────────────────────────────────── */}
         <motion.div variants={fadeUp} className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <h1 className="font-headline font-bold text-4xl text-on-surface tracking-tight">Today's Focus</h1>
-            <p className="text-on-surface-variant font-medium mt-1">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} •{' '}
-              {remaining} sessions remaining
+            <h1 className="text-5xl md:text-6xl font-headline font-black tracking-tighter text-white mb-3">
+              Schedule<span className="text-primary">.</span>
+            </h1>
+            <p className="text-on-surface-variant font-medium">
+              <span className="text-primary/80">{today}</span> — {remaining} sessions remaining
             </p>
           </div>
-          <div className="flex items-center gap-2 bg-surface-container-low p-2 rounded-2xl">
+
+          {/* View switcher */}
+          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/5 p-1.5 rounded-2xl w-fit">
             {['Day', 'Week', 'Month'].map((v) => (
-              <button key={v} onClick={() => setView(v)}
-                className={`px-4 py-2 rounded-xl font-semibold text-sm transition-all ${
-                  view === v
-                    ? 'bg-surface-container-high text-on-surface shadow-sm'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`}>
-                {v}
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`relative px-5 py-2 rounded-xl text-sm font-bold transition-all duration-300 overflow-hidden ${
+                  view === v ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                {view === v && (
+                  <motion.div
+                    layoutId="scheduler-view-bg"
+                    className="absolute inset-0 bg-gradient-to-r from-primary to-primary-container"
+                    transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                  />
+                )}
+                <span className="relative z-10">{v}</span>
               </button>
             ))}
           </div>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-          {/* Left Sidebar */}
-          <div className="lg:col-span-4 space-y-6">
-            <motion.div variants={fadeUp} className="bg-surface-container-low p-6 rounded-3xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <span className="material-symbols-outlined text-6xl">psychology</span>
-              </div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-                <span className="text-xs font-bold uppercase tracking-wider text-primary">Coach Insight</span>
-              </div>
-              <h3 className="text-xl font-headline font-bold mb-2">Stay Consistent</h3>
-              <p className="text-on-surface-variant text-sm leading-relaxed">
-                Complete your scheduled sessions to build your streak and earn XP. Every session counts.
-              </p>
+          {/* ── Left Sidebar ─────────────────────────────────────── */}
+          <div className="lg:col-span-4 space-y-5">
+
+            {/* Coach Insight */}
+            <motion.div variants={fadeUp}>
+              <PremiumCard>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">Kesari Insight</span>
+                </div>
+                <h3 className="font-headline font-black text-xl text-white tracking-tight mb-2">
+                  Stay Consistent<span className="text-primary">.</span>
+                </h3>
+                <p className="text-on-surface-variant text-sm leading-relaxed">
+                  Complete your scheduled sessions to build your streak and earn XP. Every session counts toward your focus mastery.
+                </p>
+              </PremiumCard>
             </motion.div>
 
-            {/* Progress */}
-            <motion.div variants={fadeUp} className="bg-surface-container-high rounded-2xl p-6">
-              <h3 className="font-bold text-on-surface mb-4">Daily Progress</h3>
-              <div className="space-y-4">
+            {/* Daily Progress */}
+            <motion.div variants={fadeUp}>
+              <div className="bg-surface-container-low/40 backdrop-blur-md border border-white/5 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-black text-on-surface text-lg tracking-tight">Daily Progress</h3>
+                  <span className="font-mono text-primary font-black text-sm">{done}/{tasks.length}</span>
+                </div>
+
                 {tasks.length === 0 ? (
-                  <p className="text-xs text-on-surface-variant">Add sessions above to track progress.</p>
+                  <p className="text-xs text-on-surface-variant">Add sessions to track progress.</p>
                 ) : (
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-on-surface-variant font-medium">Sessions Complete</span>
-                      <span className="text-primary font-mono font-bold">{done} / {tasks.length}</span>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs text-on-surface-variant font-bold">Sessions Complete</span>
+                      <span className="text-xs text-primary font-black font-mono">{totalPct}%</span>
                     </div>
-                    <div className="h-2 bg-surface-container-lowest rounded-full overflow-hidden">
+                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0}%` }}
-                        transition={{ duration: 0.8, ease: 'easeOut', delay: 0.4 }}
-                        className="h-full bg-gradient-to-r from-[#4ae176] to-[#00a74b] rounded-full"
+                        animate={{ width: `${totalPct}%` }}
+                        transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
+                        className="h-full bg-gradient-to-r from-primary-container to-primary rounded-full"
+                        style={{ boxShadow: '0 0 12px rgba(74,225,118,0.4)' }}
                       />
+                    </div>
+
+                    {/* Session type breakdown */}
+                    <div className="grid grid-cols-3 gap-2 mt-4">
+                      {Object.entries(PRIORITY_CONFIG).map(([key, cfg]) => {
+                        const count = tasks.filter((t) => t.priority === key).length
+                        return (
+                          <div key={key} className={`text-center py-2 px-1 rounded-xl border ${cfg.border} ${cfg.bg}`}>
+                            <div className={`text-lg font-black font-mono ${key === 'high' ? 'text-primary' : key === 'medium' ? 'text-amber-400' : 'text-on-surface-variant'}`}>{count}</div>
+                            <div className="text-[9px] font-black uppercase tracking-wider text-on-surface-variant mt-0.5">{cfg.label}</div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
               </div>
             </motion.div>
+
+            {/* Quick go to Focus */}
+            <motion.div variants={fadeUp}>
+              <Link to="/focus">
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="group flex items-center gap-4 bg-gradient-to-br from-primary/10 to-primary-container/5 border border-primary/20 hover:border-primary/40 rounded-2xl p-5 transition-all duration-300 cursor-pointer"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>timer</span>
+                  </div>
+                  <div>
+                    <p className="font-black text-white text-sm">Start Focus Session</p>
+                    <p className="text-xs text-primary/70">Open the timer →</p>
+                  </div>
+                </motion.div>
+              </Link>
+            </motion.div>
           </div>
 
-          {/* Session Timeline */}
-          <div className="lg:col-span-8 space-y-4">
+          {/* ── Session Timeline ──────────────────────────────────── */}
+          <div className="lg:col-span-8 space-y-3">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <SkeletonCard key={i} className="p-6 flex items-start gap-4">
-                  <SkeletonAvatar size="w-[20px] h-[20px] shrink-0 mt-1" />
+                  <SkeletonAvatar size="w-5 h-5 shrink-0 mt-1" />
                   <div className="flex-1">
                     <div className="flex gap-2 mb-2">
                       <SkeletonText lines={1} className="w-12 h-4 !rounded-full shrink-0" />
@@ -224,97 +295,138 @@ export default function Scheduler() {
                     </div>
                     <SkeletonText lines={1} className="w-48 h-5" />
                   </div>
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <SkeletonText lines={1} className="w-16 h-4" />
-                    <SkeletonText lines={1} className="w-8 h-3" />
-                  </div>
                 </SkeletonCard>
               ))
             ) : tasks.length === 0 ? (
-              <motion.div variants={fadeUp} className="text-center py-16 text-on-surface-variant">
-                <span className="material-symbols-outlined text-5xl mb-3 block opacity-40">event_note</span>
-                <p className="font-medium">No sessions scheduled yet.</p>
-                <p className="text-sm mt-1">Add one below to get started.</p>
+              <motion.div
+                variants={fadeUp}
+                className="flex flex-col items-center justify-center py-24 text-center"
+              >
+                <div className="w-20 h-20 rounded-3xl bg-white/3 border border-white/5 flex items-center justify-center mb-6 mx-auto">
+                  <span className="material-symbols-outlined text-4xl text-on-surface-variant/40">event_note</span>
+                </div>
+                <p className="font-black text-on-surface text-xl mb-2">No sessions yet.</p>
+                <p className="text-sm text-on-surface-variant mb-6">Add your first focus session below.</p>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setShowAddModal(true)}
+                  className="px-6 py-3 bg-primary/10 border border-primary/25 text-primary font-black rounded-xl hover:bg-primary/20 transition-colors text-sm"
+                >
+                  + Add Session
+                </motion.button>
               </motion.div>
             ) : (
-              tasks.map((session, i) => (
-                <motion.div
-                  key={session.id}
-                  variants={fadeUp}
-                  className={`
-                    rounded-2xl p-6 border-l-4 border border-outline-variant/10 transition-all duration-300
-                    ${priorityColors[session.priority]}
-                    ${session.done ? 'opacity-50' : 'hover:bg-surface-container-high'}
-                  `}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 flex-1 min-w-0">
-                      <button
-                        onClick={() => toggleDone(session.id)}
-                        className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                          session.done
-                            ? 'bg-primary border-primary'
-                            : 'border-outline-variant hover:border-primary'
-                        }`}
-                      >
-                        {session.done && (
-                          <span className="material-symbols-outlined text-[12px] text-on-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                            check
-                          </span>
-                        )}
-                      </button>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${priorityLabels[session.priority].bg}`}>
-                            {priorityLabels[session.priority].text}
-                          </span>
-                          <span className="text-xs text-on-surface-variant">{session.subject}</span>
+              <AnimatePresence>
+                {tasks.map((session) => {
+                  const cfg = PRIORITY_CONFIG[session.priority] || PRIORITY_CONFIG.low
+                  return (
+                    <motion.div
+                      key={session.id}
+                      variants={fadeUp}
+                      layout
+                      exit={{ opacity: 0, x: -20, scale: 0.97 }}
+                      className={`group relative rounded-2xl p-5 border-l-2 border transition-all duration-300 overflow-hidden ${cfg.border} ${cfg.bg} ${
+                        session.done ? 'opacity-40' : 'hover:border-l-4'
+                      }`}
+                    >
+                      {/* Hover shimmer */}
+                      {!session.done && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/2 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 pointer-events-none" />
+                      )}
+
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                          {/* Checkbox */}
+                          <motion.button
+                            whileTap={{ scale: 0.85 }}
+                            onClick={() => toggleDone(session.id)}
+                            className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+                              session.done
+                                ? 'bg-primary border-primary shadow-[0_0_12px_rgba(74,225,118,0.4)]'
+                                : `border-outline-variant/40 hover:border-primary/60 ${cfg.bg}`
+                            }`}
+                          >
+                            <AnimatePresence>
+                              {session.done && (
+                                <motion.span
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  exit={{ scale: 0 }}
+                                  className="material-symbols-outlined text-[14px] text-on-primary"
+                                  style={{ fontVariationSettings: "'FILL' 1" }}
+                                >
+                                  check
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </motion.button>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <span 
+                                className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${cfg.badge}`}
+                                aria-label={`Priority: ${cfg.label}`}
+                              >
+                                {cfg.label}
+                              </span>
+                              {session.subject && (
+                                <span className="text-xs text-on-surface-variant font-medium">{session.subject}</span>
+                              )}
+                            </div>
+                            <h3 className={`font-headline font-black text-lg text-white tracking-tight ${session.done ? 'line-through opacity-60' : ''}`}>
+                              {session.title}
+                            </h3>
+                          </div>
                         </div>
-                        <h3 className={`font-headline font-bold text-on-surface ${session.done ? 'line-through' : ''}`}>
-                          {session.title}
-                        </h3>
+
+                        <div className="text-right flex-shrink-0">
+                          {session.scheduled_time && (
+                            <div className="text-sm font-mono font-black text-white">{session.scheduled_time}</div>
+                          )}
+                          {session.duration && (
+                            <div className="text-xs text-on-surface-variant mt-0.5">{session.duration}</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="text-right flex-shrink-0">
-                      {session.scheduled_time && (
-                        <div className="text-sm font-mono font-bold text-on-surface">{session.scheduled_time}</div>
+                      {!session.done && (
+                        <div className="mt-4 flex gap-2">
+                          <Link to="/focus">
+                            <motion.button
+                              whileHover={{ scale: 1.03 }}
+                              whileTap={{ scale: 0.97 }}
+                              className="px-4 py-1.5 bg-primary/10 text-primary text-[11px] font-black rounded-xl hover:bg-primary/20 transition-colors flex items-center gap-1.5 border border-primary/15"
+                            >
+                              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
+                              Start Now
+                            </motion.button>
+                          </Link>
+                          <motion.button
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => handleDelete(session.id)}
+                            className="px-4 py-1.5 bg-red-900/10 text-red-400 text-[11px] font-black rounded-xl hover:bg-red-900/20 transition-colors flex items-center gap-1.5 border border-red-900/15"
+                          >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                            Remove
+                          </motion.button>
+                        </div>
                       )}
-                      {session.duration && (
-                        <div className="text-xs text-on-surface-variant">{session.duration}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {!session.done && (
-                    <div className="mt-4 flex gap-2">
-                      <a href="/focus">
-                        <button className="px-4 py-1.5 bg-primary/10 text-primary text-xs font-bold rounded-xl hover:bg-primary/20 transition-colors flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[14px]">play_arrow</span>
-                          Start Now
-                        </button>
-                      </a>
-                      <button
-                        onClick={() => handleDelete(session.id)}
-                        className="px-4 py-1.5 bg-red-900/10 text-red-400 text-xs font-bold rounded-xl hover:bg-red-900/20 transition-colors flex items-center gap-1"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">delete</span>
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </motion.div>
-              ))
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
             )}
 
-            {/* Add Session Button */}
+            {/* Add Button */}
             <motion.button
               variants={fadeUp}
+              whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => setShowAddModal(true)}
-              className="w-full py-4 rounded-2xl border-2 border-dashed border-outline-variant/30 text-on-surface-variant hover:border-primary/40 hover:text-primary transition-all flex items-center justify-center gap-2 font-medium"
+              className="w-full py-5 rounded-2xl border border-dashed border-white/10 hover:border-primary/30 text-on-surface-variant hover:text-primary transition-all duration-300 flex items-center justify-center gap-2 font-black text-sm group"
             >
-              <span className="material-symbols-outlined">add_circle</span>
+              <span className="material-symbols-outlined text-xl group-hover:rotate-90 transition-transform duration-300">add_circle</span>
               Add Focus Session
             </motion.button>
           </div>

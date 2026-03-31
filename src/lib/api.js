@@ -47,6 +47,14 @@ export const profileService = {
       .single()
     return { data, error }
   },
+
+  deleteAccount: async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const { data, error } = await supabase.functions.invoke('delete-account', {
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    })
+    return { data, error }
+  },
 }
 
 // ─── SESSIONS ──────────────────────────────────────────────────────────────────
@@ -91,10 +99,7 @@ export const sessionsService = {
   pauseSession: async (sessionId) => {
     const { data, error } = await supabase
       .from('sessions')
-      .update({
-        status: 'paused',
-        paused_at: new Date().toISOString(),
-      })
+      .update({ status: 'paused', paused_at: new Date().toISOString() })
       .eq('id', sessionId)
       .select()
       .single()
@@ -104,10 +109,7 @@ export const sessionsService = {
   resumeSession: async (sessionId) => {
     const { data, error } = await supabase
       .from('sessions')
-      .update({
-        status: 'running',
-        paused_at: null,
-      })
+      .update({ status: 'running', paused_at: null })
       .eq('id', sessionId)
       .select()
       .single()
@@ -148,9 +150,7 @@ export const sessionsService = {
 // ─── ANALYTICS ─────────────────────────────────────────────────────────────────
 export const analyticsService = {
   getWeeklyStats: async (userId) => {
-    const { data, error } = await supabase.rpc('get_weekly_analytics', {
-      p_user_id: userId,
-    })
+    const { data, error } = await supabase.rpc('get_weekly_analytics', { p_user_id: userId })
     return { data, error }
   },
 
@@ -209,10 +209,7 @@ export const tasksService = {
   },
 
   deleteTask: async (taskId) => {
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', taskId)
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
     return { error }
   },
 }
@@ -231,11 +228,7 @@ export const settingsService = {
   upsertSettings: async (userId, updates) => {
     const { data, error } = await supabase
       .from('settings')
-      .upsert({
-        user_id: userId,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
+      .upsert({ user_id: userId, ...updates, updated_at: new Date().toISOString() })
       .select()
       .single()
     return { data, error }
@@ -250,6 +243,143 @@ export const leaderboardService = {
       .select('*')
       .order('total_xp', { ascending: false })
       .limit(limit)
+    return { data, error }
+  },
+}
+
+// ─── NOTES ─────────────────────────────────────────────────────────────────────
+export const notesService = {
+  getNotes: async (userId) => {
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('user_id', userId)
+      .order('is_pinned', { ascending: false })
+      .order('updated_at', { ascending: false })
+    return { data, error }
+  },
+
+  createNote: async (userId, note) => {
+    const { data, error } = await supabase
+      .from('notes')
+      .insert({ user_id: userId, ...note })
+      .select()
+      .single()
+    return { data, error }
+  },
+
+  updateNote: async (noteId, updates) => {
+    const { data, error } = await supabase
+      .from('notes')
+      .update(updates)
+      .eq('id', noteId)
+      .select()
+      .single()
+    return { data, error }
+  },
+
+  deleteNote: async (noteId) => {
+    const { error } = await supabase.from('notes').delete().eq('id', noteId)
+    return { error }
+  },
+
+  searchNotes: async (userId, query) => {
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('user_id', userId)
+      .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+      .order('updated_at', { ascending: false })
+    return { data, error }
+  },
+}
+
+// ─── FLASHCARDS ────────────────────────────────────────────────────────────────
+export const flashcardsService = {
+  getDecks: async (userId) => {
+    const { data, error } = await supabase
+      .from('flashcard_decks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    return { data, error }
+  },
+
+  createDeck: async (userId, deck) => {
+    const { data, error } = await supabase
+      .from('flashcard_decks')
+      .insert({ user_id: userId, ...deck })
+      .select()
+      .single()
+    return { data, error }
+  },
+
+  deleteDeck: async (deckId) => {
+    const { error } = await supabase.from('flashcard_decks').delete().eq('id', deckId)
+    return { error }
+  },
+
+  getCards: async (deckId) => {
+    const { data, error } = await supabase
+      .from('flashcards')
+      .select('*')
+      .eq('deck_id', deckId)
+      .order('created_at', { ascending: true })
+    return { data, error }
+  },
+
+  getDueCards: async (userId) => {
+    const today = new Date().toISOString().split('T')[0]
+    const { data, error } = await supabase
+      .from('flashcards')
+      .select('*, flashcard_decks(name, subject)')
+      .eq('user_id', userId)
+      .lte('next_review', today)
+      .order('next_review', { ascending: true })
+    return { data, error }
+  },
+
+  createCard: async (deckId, userId, front, back) => {
+    const { data, error } = await supabase
+      .from('flashcards')
+      .insert({ deck_id: deckId, user_id: userId, front, back })
+      .select()
+      .single()
+    return { data, error }
+  },
+
+  updateCard: async (cardId, updates) => {
+    const { data, error } = await supabase
+      .from('flashcards')
+      .update(updates)
+      .eq('id', cardId)
+      .select()
+      .single()
+    return { data, error }
+  },
+
+  deleteCard: async (cardId) => {
+    const { error } = await supabase.from('flashcards').delete().eq('id', cardId)
+    return { error }
+  },
+}
+
+// ─── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
+export const achievementsService = {
+  getAchievements: async (userId) => {
+    const { data, error } = await supabase
+      .from('achievements')
+      .select('*')
+      .eq('user_id', userId)
+    return { data, error }
+  },
+
+  awardAchievement: async (userId, achievementKey) => {
+    const { data, error } = await supabase
+      .from('achievements')
+      .insert({ user_id: userId, achievement_key: achievementKey })
+      .select()
+      .single()
     return { data, error }
   },
 }
